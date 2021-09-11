@@ -1,0 +1,14 @@
+fastapi
+motor
+pytz
+ujson
+fastapi-pagination
+uvicorn
+lxml
+httpx
+beautifulsoup4
+fastapi-pagination==0.8.1
+camel-snake-kebab
+celery
+redis
+asgiref

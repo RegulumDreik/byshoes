@@ -1,0 +1,63 @@
+version: '3'
+
+services:
+
+  byshoes-mongodb:
+    image: mongo:latest
+    restart: on-failure
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: mongouser
+      MONGO_INITDB_ROOT_PASSWORD: password
+    ports:
+      - 27017:27017
+    networks:
+      - byshoes-network
+
+  byshoes-rest:
+    image: byshoes:latest
+    restart: on-failure
+    build:
+      context: ./
+      dockerfile: byshoes.dockerfile
+    environment:
+      MONGODB_HOST: byshoes-mongodb
+    ports:
+      - 8085:8085
+    networks:
+      - byshoes-network
+    command:
+      - uvicorn
+      - app:app
+      - --host
+      - '0.0.0.0'
+      - --port
+      - '8085'
+
+  byshoes-redis:
+    image: redis:latest
+    networks:
+      - byshoes-network
+
+  byshoes-scheduler:
+    image: byshoes:latest
+    build:
+      context: ./
+      dockerfile: byshoes.dockerfile
+    environment:
+      MONGODB_HOST: byshoes-mongodb
+      REDIS_URL: byshoes-redis
+    networks:
+      - byshoes-network
+    command:
+      - celery
+      - -A
+      - schedule
+      - worker
+      - -B
+      - -Q
+      - 'multisports'
+
+networks:
+
+  byshoes-network:
+    driver: bridge
