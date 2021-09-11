@@ -20,7 +20,10 @@ class Specification(BaseModel):
     """Модель описывающая подробности модели."""
 
     size: list[Size] = Field(description='Список размеров по типам.')
-    color: str = Field(description='Цвет модели.')
+    color: str = Field(
+        description='Цвет модели.',
+        default='неизвестно',
+    )
     sex: SexEnum = Field(description='Пол модели.')
 
     @validator('color', pre=True)
