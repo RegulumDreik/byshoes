@@ -1,8 +1,6 @@
-from typing import Any
-
-from filters import FilterSet, MongodbBackend
 from pydantic import Field
 
+from filters import FilterSet, MongodbBackend
 from src.enums import SexEnum
 from src.models import ProductModel
 

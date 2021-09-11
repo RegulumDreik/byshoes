@@ -1,5 +1,3 @@
-import logging
-
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import UJSONResponse

@@ -2,6 +2,7 @@ from dataclasses import field, make_dataclass
 from typing import Any, Type
 
 from fastapi import Query
+
 from filters.filterset import FilterSet
 
 
