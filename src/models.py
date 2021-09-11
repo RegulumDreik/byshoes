@@ -39,7 +39,7 @@ class Specification(BaseModel):
         """
         if value is None:
             return 'неизвестно'
-        return value
+        return value.lower()
 
 
 class Category(BaseModel):

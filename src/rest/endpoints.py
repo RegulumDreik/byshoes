@@ -127,69 +127,53 @@ async def get_filter_stats(
     filters = ProductFilters().apply(query_params)
     query = request.app.mongodb['byshoes-latest'].aggregate([
         {'$match': filters},
-        {
-            '$group': {
-                '_id': {'$arrayElemAt': ['$specification.size.size_type', 0]},
-                'max_price': {'$max': '$price'},
-                'min_price': {'$min': '$price'},
-                'sizes': {
-                    '$push': {'$arrayElemAt': ['$specification.size.values', 0]},
-                },
-                'categories': {'$addToSet': '$category.id'},
-                'color_types': {'$addToSet': '$specification.color'},
-            },
-        },
-        {
-            '$addFields': {
-                'sizes': {
-                    '$reduce': {
-                        'input': '$sizes',
-                        'initialValue': [],
-                        'in': {'$setUnion': ['$$value', '$$this']},
-                    },
-                },
-                'categories': {
-                    '$reduce': {
-                        'input': '$categories',
-                        'initialValue': [],
-                        'in': {'$setUnion': ['$$value', '$$this']},
-                    },
-                },
-            },
-        },
-        {
-            '$group': {
-                '_id': None,
-                'max_price': {'$max': '$max_price'},
-                'min_price': {'$min': '$min_price'},
-                'sizes': {
-                    '$addToSet': {
-                        'size_type': '$_id',
-                        'values': '$sizes',
-                    },
-                },
-                'categories': {'$addToSet': '$categories'},
-                'color_types': {'$addToSet': '$color_types'},
-            },
-        },
-        {
-            '$addFields': {
-                'categories': {
-                    '$reduce': {
-                        'input': '$categories',
-                        'initialValue': [],
-                        'in': {'$setUnion': ['$$value', '$$this']},
-                    },
-                },
-                'color_types': {
-                    '$reduce': {
-                        'input': '$color_types',
-                        'initialValue': [],
-                        'in': {'$setUnion': ['$$value', '$$this']},
-                    },
+        {'$unwind': {'path': '$specification.size'}},
+        {'$group': {
+            '_id': '$specification.size.size_type',
+            'max_price': {'$max': '$price'},
+            'min_price': {'$min': '$price'},
+            'sizes': {'$addToSet': {
+                '$arrayElemAt': ['$specification.size.values', 0],
+            }},
+            'categories': {'$addToSet': '$category.id'},
+            'color_types': {'$addToSet': '$specification.color'},
+        }},
+        {'$group': {
+            '_id': None,
+            'max_price': {'$max': '$max_price'},
+            'min_price': {'$min': '$min_price'},
+            'sizes': {'$addToSet': {
+                'size_type': '$_id',
+                'values': '$sizes',
+            }},
+            'categories': {'$addToSet': '$categories'},
+            'color_types': {'$addToSet': '$color_types'},
+        }},
+        {'$addFields': {
+            'categories': {
+                '$reduce': {
+                    'input': '$categories',
+                    'initialValue': [],
+                    'in': {'$setUnion': ['$$value', '$$this']},
                 },
             },
-        },
+            'color_types': {
+                '$reduce': {
+                    'input': '$color_types',
+                    'initialValue': [],
+                    'in': {'$setUnion': ['$$value', '$$this']},
+                },
+            },
+        }},
+        {'$addFields': {
+            'categories': {
+                '$reduce': {
+                    'input': '$categories',
+                    'initialValue': [],
+                    'in': {'$setUnion': ['$$value', '$$this']},
+                },
+            },
+        }},
     ])
     return FilterStats(
         **(await query.next()),  # noqa: B305

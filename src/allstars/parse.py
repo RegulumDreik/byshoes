@@ -1,9 +1,10 @@
 import asyncio
+import json
 import logging
-from typing import Any, Optional, Set, Tuple, Union
+from typing import Optional
 
 import httpx
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup
 from fastapi.encoders import jsonable_encoder
 from httpx import Response
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -25,23 +26,15 @@ async def parse_site():
     """Функция запускает парсинг сайта."""
     print('Start parsing allstars.')
     parse_addreses = [
-        '/catalog/muzhchiny/obuv/',
-        '/catalog/zhenshchiny/obuv/',
-        '/catalog/muzhchiny/obuv/botinki/',
-        '/catalog/muzhchiny/obuv/slantsy_i_sandalii/',
-        '/catalog/muzhchiny/obuv/futbolnye_butsy/',
-        '/catalog/muzhchiny/obuv/krossovki/',
-        '/catalog/zhenshchiny/obuv/kedy/',
-        '/catalog/zhenshchiny/obuv/krossovki_vysokie/',
-        '/catalog/zhenshchiny/obuv/sapogi_i_botinki/',
-        '/catalog/zhenshchiny/obuv/slantsy-i-sandalii/',
+        '/store/men/shoes/',
+        '/store/women/shoes/',
     ]
     tasks = [parse_main_page(page) for page in parse_addreses]
     main_page_set = set()
     results = await asyncio.gather(*tasks)
     for result in results:
         main_page_set = main_page_set | result
-    unic = remove_duplicates(main_page_set)
+    print(len(main_page_set))
     mongodb_client = AsyncIOMotorClient(
         'mongodb://{0}:{1}@{2}:{3}/{4}'.format(
             settings.MONGODB_USER,
@@ -53,11 +46,10 @@ async def parse_site():
         tz_aware=True,
     )[settings.MONGODB_DB]['byshoes-collection']
     tasks = []
-    for page in unic:
+    for page in main_page_set:
         task = asyncio.ensure_future(
             parse_product_page(
-                page['url'],
-                page['categories'],
+                page,
                 mongodb_client,
             ),
         )
@@ -67,7 +59,7 @@ async def parse_site():
     print('Finish parsing multisports.')
 
 
-async def parse_main_page(start_page: str) -> set:
+async def parse_main_page(start_page: str) -> set[str]:
     """Функция парсит постранично страницу с моделями.
 
     Args:
@@ -80,7 +72,7 @@ async def parse_main_page(start_page: str) -> set:
     print(f'Start parsing {start_page}.')
     next_page = start_page
     uniq_pages = set()
-    async with httpx.AsyncClient(base_url='https://multisports.by') as client:
+    async with httpx.AsyncClient(base_url='https://all-stars.by') as client:
         while next_page:
             try:
                 response = await client.get(next_page)
@@ -88,26 +80,18 @@ async def parse_main_page(start_page: str) -> set:
                 response = await client.get(next_page)
             soup = BeautifulSoup(response.text, 'lxml')
             next_page = get_next_page(soup)
-            category = Category(
-                id=start_page.split('/')[-2],
-                name=soup.findAll(
-                    'a',
-                    {'href': start_page},
-                )[-1].text.strip(),
-            )
             cards: list[BeautifulSoup] = soup.findAll(
-                'div',
-                {'class': 'wrap-product-card'},
+                'article',
+                {'class': 's_item'},
             )
             for item in cards:
                 uniq_pages.add(
-                    (
-                        item.findNext(
-                            'a',
-                            {'class': 'product-name'},
-                        ).attrs.get('href'),
-                        category,
-                    ),
+                    item.findNext(
+                        'div',
+                        {'class': 's_item-det'},
+                    ).findNext(
+                        'a',
+                    ).attrs.get('href'),
                 )
     print(f'Finish parsing {start_page}.')
     return uniq_pages
@@ -115,42 +99,46 @@ async def parse_main_page(start_page: str) -> set:
 
 async def parse_product_page(
     url: str,
-    categories: set[Category],
     db: AsyncIOMotorClient,
 ):
     """Парсит страницу продкута и записывает в базу информацию.
 
     Args:
         url: Ссылка на страницу продукта.
-        categories: Список категорий.
         db: Коннект к базе данных
 
     """
     print(f'Start parsing {url}.')
-    async with httpx.AsyncClient(base_url='https://multisports.by') as client:
+    async with httpx.AsyncClient(base_url='https://all-stars.by') as client:
         response: Response = await client.get(url)
         while response.status_code != 200:
             print(f'Responce is not correct: {response}.')
             await asyncio.sleep(3)
             response = await client.get(url)
         soup = BeautifulSoup(response.text, 'lxml')
-        card_info = get_card_info(soup)
-        card_info['size'] = get_sizes(soup)
+        price = soup.find(
+            'button',
+            {'class': 'js-add-cart'},
+        ).attrs['data-price']
+        old_price = soup.find(
+            'button',
+            {'class': 'js-add-cart'},
+        ).attrs['data-oldprice']
         pm = ProductModelParse(
-            title=get_title(soup),
+            title=soup.find('meta', {'itemprop': 'name'}).attrs['content'],
             images=get_images(soup, str(client.base_url)),
-            price=get_price(soup),
-            discounted_price=get_discounted_price(soup),
-            category=categories,
-            site='multisports',
-            article=card_info['article'],
-            specification=Specification.parse_obj(card_info),
+            price=price,
+            discounted_price=old_price if old_price != price else None,
+            category=get_categories(soup),
+            site='allstars',
+            article=get_article(soup),
+            specification=get_specification(soup),
         )
         await db.insert_one(jsonable_encoder(pm, by_alias=True))
         print(f'Finish parsing {url}.')
 
 
-def get_card_info(page: BeautifulSoup) -> dict[str, Any]:
+def get_categories(page: BeautifulSoup) -> list[Category]:
     """Парсинг карточки с информацией о продукте.
 
     Args:
@@ -159,34 +147,31 @@ def get_card_info(page: BeautifulSoup) -> dict[str, Any]:
     Returns:
         Информация о продукте.
     """
-    card_info: Tag = page.findAll('div', {'class': 'wrap-card-info'}).pop()
-    out = {}
-    for span in card_info.findAll('span'):
-        row = span.text.lower().split(':')
-        if row[0] not in spec_mapper.keys():
-            continue
-        key = spec_mapper[row[0]]
-        if key == 'sex':
-            row[1] = encode_sex(row[1])
-        out[key] = row[1]
+    content = page.find('div', {'class': 'breadcrumbs'}).findAll('a')
+    out = []
+    out.append(Category(id='obuv', name='обувь'))
+    out.append(Category(
+        id=content[-1].attrs['href'].split('/')[-2],
+        name=content[-1].attrs['title'].strip().lower(),
+    ))
     return out
 
 
-def encode_sex(sex: str) -> str:
-    """Переводит пол из того что записано на сайте, в енум.
+def get_specification(page: BeautifulSoup) -> Specification:
+    """Парсинг карточки с информацией о продукте.
 
     Args:
-        sex: Пол с сайта.
+        page: Страница для парсинга.
 
     Returns:
-        Пол по енуму.
+        Информация о продукте.
     """
-    sex = sex.strip()
-    if sex == 'мужчины' or sex == 'мальчики':
-        return SexEnum.MALE.value
-    if sex == 'женщины' or sex == 'девочки':
-        return SexEnum.FEMALE.value
-    return SexEnum.UNISEX.value
+    content = page.find('div', {'class': 'content-container'})
+    return Specification(
+        color=get_color(content),
+        sex=get_sex(content),
+        size=get_sizes(content),
+    )
 
 
 def get_sizes(page: BeautifulSoup) -> list[Size]:
@@ -198,71 +183,85 @@ def get_sizes(page: BeautifulSoup) -> list[Size]:
     Returns:
         Список размеров.
     """
-    sizes_block: Tag = page.findAll('ul', {'class': 'list-sizes'}).pop()
-    sizes = []
-    if sizes_block is None:
-        return []
-    for li in sizes_block.findAll('li'):
-        if not li.text.strip():
-            continue
-        sizes.append(float(li.text.strip().replace(',', '.')))
-    sizes.sort()
-    if len(sizes) == 0:
-        return []
-    return [Size(
-        size_type='ru' if sizes[-1] > 20 else 'us',
-        values=sizes,
-    )]
+    well_known_keys = ('data-us', 'data-eu', 'data-uk', 'data-ru', 'data-cm')
+    sizes_block = page.findAll('a', {'class': 'js-size-type'})
+    size_merged = {}
+    for size in sizes_block:
+        for key, value in size.attrs.items():
+            if key not in size_merged:
+                size_merged[key] = []
+            size_merged[key].append(value)
+    out = []
+    for key, value in size_merged.items():
+        if key in well_known_keys:
+            out.append(Size(
+                size_type=key.split('-')[-1],
+                values=value,
+            ))
+    return out
 
 
-def get_price(page: BeautifulSoup) -> Optional[float]:
-    """Парсит карточку с ценой.
-
-    Args:
-        page: Страница для парсинга.
-
-    Returns:
-        Цена.
-    """
-    price_block: Tag = page.findAll('div', {'class': 'price-list'}).pop()
-    card_info = price_block.findAll('span', {'class': 'cur-price'})
-    if len(card_info) == 0:
-        return None
-    card_info = card_info.pop()
-    return float(card_info.text.strip().split(' ')[0])
-
-
-def get_discounted_price(page: BeautifulSoup) -> Optional[float]:
-    """Парсит карточку с ценой для поиска цены до скидки.
+def get_color(page: BeautifulSoup) -> str:
+    """Парсинг в поисках цвета.
 
     Args:
         page: Страница для парсинга.
 
     Returns:
-        Цена до скидки.
+        наименование цвета.
     """
-    price_block: Tag = page.findAll('div', {'class': 'price-list'}).pop()
-    card_info = price_block.findAll('span', {'class': 'old-price'})
-    if len(card_info) == 0:
-        return None
-    card_info = card_info.pop()
-    return float(card_info.text.strip().split(' ')[0])
+    return json.loads(page.find(
+        'button', {'class': 'js-add-cart'},
+    ).attrs.get(
+        'data-pixel-add-items-to-cart',
+    )).get('color')
 
 
-def get_title(page: BeautifulSoup) -> str:
-    """Парсит карточку в поисках названия.
+def get_article(page: BeautifulSoup) -> str:
+    """Парсинг в поисках цвета.
 
     Args:
         page: Страница для парсинга.
 
     Returns:
-        Название модели.
+        наименование цвета.
     """
-    title_tag: Tag = page.findAll(
-        'div',
-        {'class': 'wrap-product-card-name'},
-    ).pop()
-    return title_tag.text.strip()
+    return json.loads(page.find(
+        'button', {'class': 'js-add-cart'},
+    ).attrs.get(
+        'data-pixel-add-items-to-cart',
+    )).get('article')
+
+
+def get_sex(page: BeautifulSoup) -> SexEnum:
+    """Парсинг в поисках цвета.
+
+    Args:
+        page: Страница для парсинга.
+
+    Returns:
+        наименование цвета.
+    """
+    return encode_sex(page.find(
+        'div', {'class': 'subtitle'},
+    ).text)
+
+
+def encode_sex(sex: str) -> SexEnum:
+    """Переводит пол из того что записано на сайте, в енум.
+
+    Args:
+        sex: Пол с сайта.
+
+    Returns:
+        Пол по енуму.
+    """
+    sex = sex.strip().lower()
+    if sex == 'для мужчин' or sex == 'для мальчиков':
+        return SexEnum.MALE
+    if sex == 'для женщин' or sex == 'для девочек':
+        return SexEnum.FEMALE
+    return SexEnum.UNISEX
 
 
 def get_next_page(page: BeautifulSoup) -> Optional[str]:
@@ -274,12 +273,12 @@ def get_next_page(page: BeautifulSoup) -> Optional[str]:
     Returns:
         Ссылку на следующую страницу.
     """
-    pagination = page.findAll('div', {'class': 'pagination'})
+    pagination = page.findAll('nav', {'class': 'pages'})
     if len(pagination) == 0:
         return None
     next_page_tag = pagination[0].findNext(
         'a',
-        {'title': 'Следующая страница'},
+        {'aria-label': 'Next'},
     )
     if next_page_tag is None:
         return None
@@ -297,32 +296,8 @@ def get_images(page: BeautifulSoup, base_url: str) -> list[HttpUrl]:
     Returns:
         Список ссылок на картинки.
     """
-    image_rotator = page.findAll('div', {'class': 'main-image'}).pop()
+    image_rotator = page.find('ul', {'class': 'js-images-main'}).findAll('img')
     images = []
-    for img in image_rotator.findAll('img'):
+    for img in image_rotator:
         images.append(base_url + img.attrs['src'])
     return images
-
-
-def remove_duplicates(
-    urls: Set[Tuple[str, Category]],
-) -> list[dict[str, Union[str, set[Category]]]]:
-    """Удаляет дубликаты моделей из списка ссылок, сохраняет категории.
-
-    Args:
-        urls: Список ссылок для обработки.
-
-    Returns:
-        Список ссылок для дальнейшего парсинга.
-    """
-    unic_item_urls = {}
-    for url in urls:
-        object_name = url[0].split('/')[-2]
-        if object_name in unic_item_urls.keys():
-            unic_item_urls[object_name]['categories'].add(url[1])
-            continue
-        unic_item_urls[object_name] = {
-            'url': url[0],
-            'categories': {url[1]},
-        }
-    return list(unic_item_urls.values())
