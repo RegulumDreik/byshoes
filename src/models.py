@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 import pytz
 from camel_snake_kebab import snake_case
@@ -110,14 +110,28 @@ class FilterStats(BaseModel):
     """Информация о доступных значениях в фильтрах."""
 
     categories: list[str] = Field(description='Список доступных категорий.')
-    sizes: list[float] = Field(description='Список доступных размеров.')
-    size_types: list[str] = Field(
-        description='Список доступных типов размеров.',
-    )
+    sizes: list[Size] = Field(description='Список доступных размеров.')
     sex_types: list[str] = Field(description='Список доступных полов.')
     color_types: list[str] = Field(description='Список доступных цветов.')
     min_price: float = Field(description='Минимальная цена.')
     max_price: float = Field(description='Максимальная цена.')
+
+    @validator('sizes', pre=True)
+    @classmethod
+    def null_remove(cls, values: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Преобразования нулевого цвета в неизвестный.
+
+        Args:
+            values: Значение для валидации.
+
+        Returns:
+            Провалидированное значение.
+        """
+        out = []
+        for size in values:
+            if size['size_type'] is not None:
+                out.append(size)
+        return out
 
 
 class ProductModelList(BaseModel):
