@@ -10,8 +10,6 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: password
     volumes:
       - byshoes-mongodb-data:/data/db
-    ports:
-      - 27017:27017
     networks:
       - byshoes-network
 
@@ -23,8 +21,6 @@ services:
       dockerfile: byshoes.dockerfile
     environment:
       MONGODB_HOST: byshoes-mongodb
-    ports:
-      - 8085:8085
     networks:
       - byshoes-network
     command:
