@@ -8,6 +8,8 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: mongouser
       MONGO_INITDB_ROOT_PASSWORD: password
+    volumes:
+      - byshoes-mongodb-data:/data/db
     ports:
       - 27017:27017
     networks:
@@ -55,9 +57,14 @@ services:
       - worker
       - -B
       - -Q
-      - 'multisports'
+      - 'multisports,allstars'
 
 networks:
 
   byshoes-network:
     driver: bridge
+
+volumes:
+
+  byshoes-mongodb-data:
+    driver: local
