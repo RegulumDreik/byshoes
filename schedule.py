@@ -20,10 +20,22 @@ worker.conf.task_routes = {
 worker.conf.beat_schedule = {
     'parse-multisports': {
         'task': 'src.runners.parse_multisports',
-        'schedule': crontab(hour='*/12', minute=0),
+        'schedule': crontab(
+            month_of_year=settings.CRON_MONTH_OF_YEAR,
+            day_of_month=settings.CRON_DAY_OF_MONTH,
+            day_of_week=settings.CRON_DAY_OF_WEEK,
+            hour=settings.CRON_HOUR,
+            minute=settings.CRON_MINUTE,
+        ),
     },
     'parse-allstrs': {
         'task': 'src.runners.parse_allstars',
-        'schedule': crontab(hour='*/12', minute=0),
+        'schedule': crontab(
+            month_of_year=settings.CRON_MONTH_OF_YEAR,
+            day_of_month=settings.CRON_DAY_OF_MONTH,
+            day_of_week=settings.CRON_DAY_OF_WEEK,
+            hour=settings.CRON_HOUR,
+            minute=settings.CRON_MINUTE,
+        ),
     },
 }

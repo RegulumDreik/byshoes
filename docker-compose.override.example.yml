@@ -1,0 +1,36 @@
+version: '3'
+
+services:
+
+  byshoes-mongodb:
+    ports:
+      - 27017:27017
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: byshoes-admin
+      MONGO_INITDB_ROOT_PASSWORD: 'password'
+
+  byshoes-rest:
+    environment:
+      MONGODB_HOST: byshoes-mongodb
+      MONGODB_USER: byshoes-user
+      MONGODB_PASSWORD: 'password'
+    ports:
+      - 8080:8080
+    command:
+      - uvicorn
+      - app:app
+      - --host
+      - '0.0.0.0'
+      - --port
+      - '8080'
+
+  byshoes-scheduler:
+    environment:
+      MONGODB_HOST: byshoes-mongodb
+      MONGODB_USER: byshoes-user
+      MONGODB_PASSWORD: 'password'
+      CRON_MINUTE: '0'
+      CRON_HOUR: '*/12'
+      CRON_DAY_OF_WEEK: '*'
+      CRON_DAY_OF_MONTH: '*'
+      CRON_MONTH_OF_YEAR: '*'
