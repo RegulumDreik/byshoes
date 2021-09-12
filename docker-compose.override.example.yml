@@ -29,6 +29,7 @@ services:
       MONGODB_HOST: byshoes-mongodb
       MONGODB_USER: byshoes-user
       MONGODB_PASSWORD: 'password'
+      REDIS_URL: byshoes-redis
       CRON_MINUTE: '0'
       CRON_HOUR: '*/12'
       CRON_DAY_OF_WEEK: '*'
