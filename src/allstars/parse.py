@@ -1,6 +1,8 @@
 import asyncio
 import json
 import logging
+import re
+from json import JSONDecodeError
 from typing import Optional
 
 import httpx
@@ -115,7 +117,16 @@ async def parse_product_page(
             print(f'Responce is not correct: {response}.')
             await asyncio.sleep(3)
             response = await client.get(url)
+        add_item_json = re.search(
+            "data-pixel-add-items-to-cart='({.*})'",
+            response.text,
+        )[1]
+        # Костыль, чтобы объекты у которых в названии неэкранированный ' не
+        # ломали парсер.
         soup = BeautifulSoup(response.text, 'lxml')
+        soup.find(
+            'button', {'class': 'js-add-cart'},
+        ).attrs['data-pixel-add-items-to-cart'] = add_item_json
         price = soup.find(
             'button',
             {'class': 'js-add-cart'},
@@ -210,7 +221,7 @@ def get_sizes(page: BeautifulSoup) -> list[Size]:  # noqa: C901
     return out
 
 
-def get_color(page: BeautifulSoup) -> str:
+def get_color(page: BeautifulSoup) -> list[str]:
     """Парсинг в поисках цвета.
 
     Args:
@@ -223,7 +234,7 @@ def get_color(page: BeautifulSoup) -> str:
         'button', {'class': 'js-add-cart'},
     ).attrs.get(
         'data-pixel-add-items-to-cart',
-    )).get('color')
+    )).get('color').split(' ')
 
 
 def get_article(page: BeautifulSoup) -> str:
@@ -235,11 +246,14 @@ def get_article(page: BeautifulSoup) -> str:
     Returns:
         наименование цвета.
     """
-    return json.loads(page.find(
-        'button', {'class': 'js-add-cart'},
-    ).attrs.get(
-        'data-pixel-add-items-to-cart',
-    )).get('article')
+    try:
+        return json.loads(page.find(
+            'button', {'class': 'js-add-cart'},
+        ).attrs.get(
+            'data-pixel-add-items-to-cart',
+        )).get('article')
+    except JSONDecodeError:
+        raise JSONDecodeError
 
 
 def get_sex(page: BeautifulSoup) -> SexEnum:

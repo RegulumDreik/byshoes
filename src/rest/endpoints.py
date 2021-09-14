@@ -135,7 +135,7 @@ async def get_filter_stats(
             'sizes': {'$addToSet': {
                 '$arrayElemAt': ['$specification.size.values', 0],
             }},
-            'categories': {'$addToSet': '$category.id'},
+            'categories': {'$addToSet': '$category'},
             'color_types': {'$addToSet': '$specification.color'},
         }},
         {'$group': {
@@ -169,6 +169,13 @@ async def get_filter_stats(
             'categories': {
                 '$reduce': {
                     'input': '$categories',
+                    'initialValue': [],
+                    'in': {'$setUnion': ['$$value', '$$this']},
+                },
+            },
+            'color_types': {
+                '$reduce': {
+                    'input': '$color_types',
                     'initialValue': [],
                     'in': {'$setUnion': ['$$value', '$$this']},
                 },

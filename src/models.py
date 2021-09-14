@@ -4,7 +4,7 @@ from typing import Any, Literal, Optional
 
 import pytz
 from camel_snake_kebab import snake_case
-from pydantic import BaseModel, Field, HttpUrl, validator
+from pydantic import BaseModel, Field, HttpUrl, root_validator, validator
 
 from src.enums import SexEnum
 
@@ -20,13 +20,13 @@ class Specification(BaseModel):
     """Модель описывающая подробности модели."""
 
     size: list[Size] = Field(description='Список размеров по типам.')
-    color: str = Field(
+    color: list[str] = Field(
         description='Цвет модели.',
-        default='неизвестно',
+        default=['неизвестно'],
     )
     sex: SexEnum = Field(description='Пол модели.')
 
-    @validator('color', pre=True)
+    @validator('color', pre=True, each_item=True)
     @classmethod
     def null_remove(cls, value: Optional[str]) -> str:
         """Преобразования нулевого цвета в неизвестный.
@@ -39,6 +39,8 @@ class Specification(BaseModel):
         """
         if value is None:
             return 'неизвестно'
+        if value.lower() == 'array':
+            return 'неизвестно'
         return value.lower()
 
 
@@ -47,6 +49,23 @@ class Category(BaseModel):
 
     id: str = Field(description='Идентификатор категории.')
     name: str = Field(description='Читаемое название категории.')
+
+    @root_validator
+    @classmethod
+    def validate_class(cls, values):
+        """Метод сокращения не нужных категорий.
+
+        Args:
+            values: Значения
+
+        Returns:
+            Провалидированное значения
+        """
+        if snake_case(values['id']) == 'krossovki_vysokie':
+            return {'id': 'krossovki', 'name': 'кроссовки'}
+        if snake_case(values['id']) == 'nike':
+            return {'id': 'krossovki', 'name': 'кроссовки'}
+        return values
 
     @validator('id')
     @classmethod
@@ -60,6 +79,19 @@ class Category(BaseModel):
             провалидированное значение
         """
         return snake_case(value)
+
+    @validator('name')
+    @classmethod
+    def validator_name(cls, value):
+        """Метод для нормализации идентификатора модели.
+
+        Args:
+            value: значение для валидации
+
+        Returns:
+            провалидированное значение
+        """
+        return value.lower()
 
     class Config:
         """Класс конфигурации модели."""
@@ -80,6 +112,7 @@ class ProductModelParse(BaseModel):
     )
     title: str = Field(description='Идентификатор категории.')
     images: list[HttpUrl] = Field(description='Список картинок модели.')
+    link: HttpUrl = Field(description='Адрес страницы с которой спарсили.')
     price: float = Field(description='Цена.')
     discounted_price: Optional[float] = Field(description='Цена до скидки.')
     category: list[Category] = Field(description='Список категорий модели.')
@@ -109,7 +142,9 @@ class ProductModel(ProductModelParse):
 class FilterStats(BaseModel):
     """Информация о доступных значениях в фильтрах."""
 
-    categories: list[str] = Field(description='Список доступных категорий.')
+    categories: list[Category] = Field(
+        description='Список доступных категорий.',
+    )
     sizes: list[Size] = Field(description='Список доступных размеров.')
     sex_types: list[str] = Field(description='Список доступных полов.')
     color_types: list[str] = Field(description='Список доступных цветов.')

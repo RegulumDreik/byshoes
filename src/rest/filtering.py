@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import Field
 
 from filters import FilterSet, MongodbBackend
@@ -75,6 +77,11 @@ class ProductFilters(FilterSet):
         field='specification.size.values',
         operators=['eq', 'ne'],
         description='по размеру',
+    )
+    site: Literal['multisports', 'allstars'] = Field(
+        field='site',
+        operators=['eq'],
+        description='по сайту с которого спарсили',
     )
 
     class Meta(object):

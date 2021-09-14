@@ -174,8 +174,8 @@ def get_card_info(page: BeautifulSoup) -> dict[str, Any]:
         key = spec_mapper[row[0]]
         if key == 'sex':
             row[1] = encode_sex(row[1])
-        if key == 'color' and row[1] == 'array':
-            row[1] = None
+        if key == 'color':
+            row[1] = [row[1]]
         out[key] = row[1]
     return out
 
