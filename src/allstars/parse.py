@@ -180,7 +180,7 @@ def get_specification(page: BeautifulSoup) -> Specification:
     )
 
 
-def get_sizes(page: BeautifulSoup) -> list[Size]:
+def get_sizes(page: BeautifulSoup) -> list[Size]:  # noqa: C901
     """Парсит карточку размеров продкута.
 
     Args:
@@ -200,10 +200,13 @@ def get_sizes(page: BeautifulSoup) -> list[Size]:
     out = []
     for key, value in size_merged.items():
         if key in well_known_keys:
-            out.append(Size(
-                size_type=key.split('-')[-1],
-                values=value,
-            ))
+            try:
+                out.append(Size(
+                    size_type=key.split('-')[-1],
+                    values=value,
+                ))
+            except ValidationError:
+                continue
     return out
 
 
