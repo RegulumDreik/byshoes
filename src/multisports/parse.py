@@ -136,16 +136,22 @@ async def parse_product_page(
         soup = BeautifulSoup(response.text, 'lxml')
         card_info = get_card_info(soup)
         card_info['size'] = get_sizes(soup)
-        pm = ProductModelParse(
-            title=get_title(soup),
-            images=get_images(soup, str(client.base_url)),
-            price=get_price(soup),
-            discounted_price=get_discounted_price(soup),
-            category=categories,
-            site='multisports',
-            article=card_info['article'],
-            specification=Specification.parse_obj(card_info),
-        )
+        try:
+            pm = ProductModelParse(
+                title=get_title(soup),
+                images=get_images(soup, str(client.base_url)),
+                link=str(client.base_url) + url,
+                price=get_price(soup),
+                discounted_price=get_discounted_price(soup),
+                category=categories,
+                site='multisports',
+                article=card_info['article'],
+                specification=Specification.parse_obj(card_info),
+            )
+        except ValidationError as exc:
+            print(exc.json())
+            print('error on' + str(client.base_url) + url)
+            return
         await db.insert_one(jsonable_encoder(pm, by_alias=True))
         print(f'Finish parsing {url}.')
 

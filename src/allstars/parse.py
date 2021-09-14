@@ -124,16 +124,22 @@ async def parse_product_page(
             'button',
             {'class': 'js-add-cart'},
         ).attrs['data-oldprice']
-        pm = ProductModelParse(
-            title=soup.find('meta', {'itemprop': 'name'}).attrs['content'],
-            images=get_images(soup, str(client.base_url)),
-            price=price,
-            discounted_price=old_price if old_price != price else None,
-            category=get_categories(soup),
-            site='allstars',
-            article=get_article(soup),
-            specification=get_specification(soup),
-        )
+        try:
+            pm = ProductModelParse(
+                title=soup.find('meta', {'itemprop': 'name'}).attrs['content'],
+                images=get_images(soup, str(client.base_url)),
+                link=str(client.base_url) + url,
+                price=price,
+                discounted_price=old_price if old_price != price else None,
+                category=get_categories(soup),
+                site='allstars',
+                article=get_article(soup),
+                specification=get_specification(soup),
+            )
+        except ValidationError as exc:
+            print(exc.json())
+            print('error on' + str(client.base_url) + url)
+            return
         await db.insert_one(jsonable_encoder(pm, by_alias=True))
         print(f'Finish parsing {url}.')
 
