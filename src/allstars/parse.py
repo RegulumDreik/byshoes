@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 from fastapi.encoders import jsonable_encoder
 from httpx import Response
 from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import HttpUrl
+from pydantic import HttpUrl, ValidationError
 
 from src.enums import SexEnum
 from src.models import Category, ProductModelParse, Size, Specification
