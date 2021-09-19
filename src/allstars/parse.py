@@ -52,13 +52,12 @@ async def parse_site():
         task = asyncio.ensure_future(
             parse_product_page(
                 page,
-                mongodb_client,
             ),
         )
         await asyncio.sleep(1)
         tasks.append(task)
-    await asyncio.gather(*tasks)
-    print('Finish parsing multisports.')
+    print('Finish parsing allstars.')
+    return await asyncio.gather(*tasks)
 
 
 async def parse_main_page(start_page: str) -> set[str]:
@@ -101,13 +100,11 @@ async def parse_main_page(start_page: str) -> set[str]:
 
 async def parse_product_page(
     url: str,
-    db: AsyncIOMotorClient,
 ):
     """Парсит страницу продкута и записывает в базу информацию.
 
     Args:
         url: Ссылка на страницу продукта.
-        db: Коннект к базе данных
 
     """
     print(f'Start parsing {url}.')
@@ -151,8 +148,8 @@ async def parse_product_page(
             print(exc.json())
             print('error on' + str(client.base_url) + url)
             return
-        await db.insert_one(jsonable_encoder(pm, by_alias=True))
         print(f'Finish parsing {url}.')
+        return jsonable_encoder(pm, by_alias=True)
 
 
 def get_categories(page: BeautifulSoup) -> list[Category]:

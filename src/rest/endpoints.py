@@ -17,6 +17,7 @@ from src.models import (
 from src.rest.filtering import ProductFilters
 from src.rest.ordering import ProductOrdering
 from src.utils.paginate import paginate
+from src.utils.utils import get_max_version
 
 router = APIRouter(
     prefix='/api',
@@ -55,10 +56,14 @@ async def get_product_list(
         Список продуктов
 
     """
+    max_version = await get_max_version(
+        request.app.mongodb['byshoes-collection'],
+    )
     filters = ProductFilters().apply(query_params)
+    filters['version'] = {'$eq': max_version}
     sort_by, order_by = order.apply({})
     return await paginate(
-        request.app.mongodb['byshoes-latest'],
+        request.app.mongodb['byshoes-collection'],
         filters,
         ProductModelList,
         sort_by,
@@ -95,6 +100,79 @@ async def get_product_full_list(
     sort_by, order_by = order.apply({})
     return await paginate(
         request.app.mongodb['byshoes-collection'],
+        filters,
+        ProductModelParseList,
+        sort_by,
+        order_by,
+    )
+
+
+@router.get(
+    '/products/new',
+    response_model=Page[ProductModelParse],
+    response_model_by_alias=False,
+    responses={
+        404: {'description': 'Item not found'},
+    },
+    description='Список продкутов за все время.',
+)
+async def get_product_new_list(
+    request: Request,
+    query_params: filter_params(ProductFilters) = Depends(),
+    order: ProductOrdering = Depends(ProductOrdering),
+) -> JSONResponse:
+    """Получение списка продуктов.
+
+    Args:
+        request: запрос
+        query_params: параметры фильтров
+        order: параметры сортировки
+
+    Returns:
+        Список продкутов
+
+    """
+    collection = request.app.mongodb['byshoes-collection']
+    max_version = await get_max_version(collection)
+    last_items = collection.aggregate(
+        [
+            {'$match': {'version': {'$eq': max_version}}},
+            {'$group': {'_id': {'$concat': ['$site', '$article']}}},
+        ],
+        allowDiskUse=True,
+    )
+    prev_items = collection.aggregate(
+        [
+            {'$match': {'version': {'$eq': max_version - 1}}},
+            {'$group': {'_id': {'$concat': ['$site', '$article']}}},
+        ],
+        allowDiskUse=True,
+    )
+    last_items = await last_items.to_list(None)
+    last_items = {item['_id'] for item in last_items}
+    prev_items = await prev_items.to_list(None)
+    prev_items = {item['_id'] for item in prev_items}
+    new_items = list(last_items - prev_items)
+    new_items_ids = collection.aggregate(
+        [
+            {'$match': {'version': {'$eq': max_version}}},
+            {'$group': {
+                '_id': {'$concat': ['$site', '$article']},
+                'id': {'$last': '$_id'},
+            }},
+            {'$match': {'_id': {'$in': new_items}}},
+        ],
+        allowDiskUse=True,
+    )
+    new_items_ids = await new_items_ids.to_list(None)
+    new_items_ids = [item['id'] for item in new_items_ids]
+
+    filters = ProductFilters().apply(query_params)
+    filters['_id'] = {'$in': new_items_ids}
+    filters['version'] = {'$eq': max_version}
+    sort_by, order_by = order.apply({})
+    return await paginate(
+        collection,
         filters,
         ProductModelParseList,
         sort_by,
@@ -181,7 +259,7 @@ async def get_filter_stats(
                 },
             },
         }},
-    ])
+    ],  allowDiskUse=True,)
     return FilterStats(
         **(await query.next()),  # noqa: B305
         sex_types=[e.value for e in SexEnum],

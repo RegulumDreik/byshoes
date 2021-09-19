@@ -53,7 +53,7 @@ services:
       - worker
       - -B
       - -Q
-      - 'multisports,allstars'
+      - 'all'
 
 networks:
 

@@ -6,6 +6,7 @@ import uvicorn
 
 from src.allstars.parse import parse_site as allstars
 from src.multisports.parse import parse_site as multisports
+from src.runners import start_parse
 
 
 @click.group()
@@ -47,8 +48,7 @@ def startparse(ctx: click.core.Context) -> None:
     """
     logging.basicConfig(format='%(asctime)-15s %(message)s', level=20)
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(multisports())
-    loop.run_until_complete(allstars())
+    loop.run_until_complete(start_parse())
 
 
 if __name__ == '__main__':

@@ -6,12 +6,10 @@ import httpx
 from bs4 import BeautifulSoup, Tag
 from fastapi.encoders import jsonable_encoder
 from httpx import Response
-from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import HttpUrl, ValidationError
 
 from src.enums import SexEnum
 from src.models import Category, ProductModelParse, Size, Specification
-from src.settings import settings
 
 spec_mapper = {
     'пол': 'sex',
@@ -22,7 +20,11 @@ logger = logging.getLogger(__name__)
 
 
 async def parse_site():
-    """Функция запускает парсинг сайта."""
+    """Функция запускает парсинг сайта.
+
+    Returns:
+        Список спаршенных сущностей.
+    """
     print('Start parsing multisports.')
     parse_addreses = [
         '/catalog/muzhchiny/obuv/',
@@ -42,29 +44,18 @@ async def parse_site():
     for result in results:
         main_page_set = main_page_set | result
     unic = remove_duplicates(main_page_set)
-    mongodb_client = AsyncIOMotorClient(
-        'mongodb://{0}:{1}@{2}:{3}/{4}'.format(
-            settings.MONGODB_USER,
-            settings.MONGODB_PASSWORD,
-            settings.MONGODB_HOST,
-            settings.MONGODB_PORT,
-            settings.MONGODB_DB,
-        ),
-        tz_aware=True,
-    )[settings.MONGODB_DB]['byshoes-collection']
     tasks = []
     for page in unic:
         task = asyncio.ensure_future(
             parse_product_page(
                 page['url'],
                 page['categories'],
-                mongodb_client,
             ),
         )
         await asyncio.sleep(1)
         tasks.append(task)
-    await asyncio.gather(*tasks)
     print('Finish parsing multisports.')
+    return await asyncio.gather(*tasks)
 
 
 async def parse_main_page(start_page: str) -> set:
@@ -116,15 +107,15 @@ async def parse_main_page(start_page: str) -> set:
 async def parse_product_page(
     url: str,
     categories: set[Category],
-    db: AsyncIOMotorClient,
-):
+) -> dict[str, Any]:
     """Парсит страницу продкута и записывает в базу информацию.
 
     Args:
         url: Ссылка на страницу продукта.
         categories: Список категорий.
-        db: Коннект к базе данных
 
+    Returns:
+        Спаршенная сущность.
     """
     print(f'Start parsing {url}.')
     async with httpx.AsyncClient(base_url='https://multisports.by') as client:
@@ -152,8 +143,7 @@ async def parse_product_page(
             print(exc.json())
             print('error on' + str(client.base_url) + url)
             return
-        await db.insert_one(jsonable_encoder(pm, by_alias=True))
-        print(f'Finish parsing {url}.')
+        return jsonable_encoder(pm, by_alias=True)
 
 
 def get_card_info(page: BeautifulSoup) -> dict[str, Any]:

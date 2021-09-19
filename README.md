@@ -10,30 +10,6 @@
 4. Подключится к базе данных mongodb для настройки базы.
    1. Создайте базу командой `use byshoes`
    2. Создайте коллекцию командой `db.createCollection('byshoes-collection')`
-   3. Создайте view командой:
-   ```sh
-   db.createView(
-       "byshoes-latest",
-       "byshoes-collection",
-        [
-          {$sort: {parsed: 1}}, 
-          {$group: {
-            _id: {$concat: ['$site', '$article']},
-            id: {$last: '$_id'},
-            title: {$last: '$title'},
-            images: {$last: '$images'},
-            images: {$last: '$link'},
-            price: {$last: '$price'},
-            discounted_price: {$last: '$discounted_price'},
-            category: {$last: '$category'},
-            specification: {$last: '$specification'},
-            site: {$last: '$site'},
-            article: {$last: '$article'},
-            parsed: {$last: '$parsed'}
-          }}
-        ]
-   )
-   ```
    4. Создайте пользователя для базы данных командой. Не забудьте задать пароль указанный ранее в `docker-compose.override.yml`
    ```sh
    db.createUser({user: 'byshoes-user', pwd: '<PASSWORD>' , roles: [ { role: 'readWrite', db: 'byshoes' } ]})

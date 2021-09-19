@@ -125,6 +125,9 @@ class ProductModelParse(BaseModel):
         description='Дата когда спарсили.',
         default_factory=lambda: datetime.now(pytz.utc),
     )
+    version: Optional[int] = Field(
+        description='Запуск парсера для получения данного объекта.'
+    )
 
 
 class ProductModel(ProductModelParse):
