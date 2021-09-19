@@ -143,6 +143,7 @@ async def parse_product_page(
             print(exc.json())
             print('error on' + str(client.base_url) + url)
             return
+        print(f'Finish parsing {url}.')
         return jsonable_encoder(pm, by_alias=True)
 
 

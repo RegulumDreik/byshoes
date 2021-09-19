@@ -23,5 +23,7 @@ async def get_max_version(db: AsyncIOMotorCollection) -> int:
         allowDiskUse=True,
     )
     parse_version = await query.to_list(None)
+    if len(parse_version) == 0:
+        return 0
     parse_version = parse_version[0]['parse_version']
     return 0 if parse_version is None else parse_version

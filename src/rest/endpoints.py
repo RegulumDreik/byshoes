@@ -141,18 +141,23 @@ async def get_product_new_list(
         ],
         allowDiskUse=True,
     )
-    prev_items = collection.aggregate(
-        [
-            {'$match': {'version': {'$eq': max_version - 1}}},
-            {'$group': {'_id': {'$concat': ['$site', '$article']}}},
-        ],
-        allowDiskUse=True,
-    )
     last_items = await last_items.to_list(None)
     last_items = {item['_id'] for item in last_items}
-    prev_items = await prev_items.to_list(None)
-    prev_items = {item['_id'] for item in prev_items}
-    new_items = list(last_items - prev_items)
+    depth = 0
+    while True:
+        depth += 1
+        prev_items = collection.aggregate(
+            [
+                {'$match': {'version': {'$eq': max_version - depth}}},
+                {'$group': {'_id': {'$concat': ['$site', '$article']}}},
+            ],
+            allowDiskUse=True,
+        )
+        prev_items = await prev_items.to_list(None)
+        prev_items = {item['_id'] for item in prev_items}
+        new_items = list(last_items - prev_items)
+        if not (len(new_items) == 0 and depth < max_version):
+            break
     new_items_ids = collection.aggregate(
         [
             {'$match': {'version': {'$eq': max_version}}},
