@@ -1,12 +1,12 @@
 import uuid
 from datetime import datetime
-from typing import Any, Literal, Optional
+from typing import Any, Optional
 
 import pytz
 from camel_snake_kebab import snake_case
 from pydantic import BaseModel, Field, HttpUrl, root_validator, validator
 
-from src.enums import SexEnum
+from src.enums import SexEnum, SiteEnum
 
 
 class Size(BaseModel):
@@ -117,7 +117,7 @@ class ProductModelParse(BaseModel):
     discounted_price: Optional[float] = Field(description='Цена до скидки.')
     category: list[Category] = Field(description='Список категорий модели.')
     specification: Specification = Field(description='Спецификация модели.')
-    site: Literal['multisports', 'allstars'] = Field(
+    site: SiteEnum = Field(
         description='Сайт с которого спарсили.',
     )
     article: Optional[str] = Field(description='Артикул модели.')
@@ -126,7 +126,7 @@ class ProductModelParse(BaseModel):
         default_factory=lambda: datetime.now(pytz.utc),
     )
     version: Optional[int] = Field(
-        description='Запуск парсера для получения данного объекта.'
+        description='Запуск парсера для получения данного объекта.',
     )
 
 
@@ -150,6 +150,7 @@ class FilterStats(BaseModel):
     )
     sizes: list[Size] = Field(description='Список доступных размеров.')
     sex_types: list[str] = Field(description='Список доступных полов.')
+    site_types: list[str] = Field(description='Список доступных сайтов.')
     color_types: list[str] = Field(description='Список доступных цветов.')
     min_price: float = Field(description='Минимальная цена.')
     max_price: float = Field(description='Максимальная цена.')

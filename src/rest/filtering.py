@@ -3,7 +3,7 @@ from typing import Literal
 from pydantic import Field
 
 from filters import FilterSet, MongodbBackend
-from src.enums import SexEnum
+from src.enums import SexEnum, SiteEnum
 from src.models import ProductModel
 
 
@@ -78,10 +78,15 @@ class ProductFilters(FilterSet):
         operators=['eq', 'ne'],
         description='по размеру',
     )
-    site: Literal['multisports', 'allstars'] = Field(
+    site: SiteEnum = Field(
         field='site',
-        operators=['eq'],
+        operators=['eq', 'ne'],
         description='по сайту с которого спарсили',
+    )
+    site_list: list[SiteEnum] = Field(
+        field='site',
+        operators=['in', 'not_in'],
+        description='по полу',
     )
 
     class Meta(object):

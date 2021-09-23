@@ -8,3 +8,11 @@ class SexEnum(str, Enum):
     MALE = 'm'
     FEMALE = 'f'
     UNISEX = 'u'
+
+
+@unique
+class SiteEnum(str, Enum):
+    """Перечисление описывающее существующие сайты."""
+
+    ALLSTARS = 'allstars'
+    MULTISPORTS = 'multisports'

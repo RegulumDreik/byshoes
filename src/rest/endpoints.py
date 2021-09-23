@@ -6,7 +6,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from filters import filter_params
-from src.enums import SexEnum
+from src.enums import SexEnum, SiteEnum
 from src.models import (
     FilterStats,
     ProductModel,
@@ -207,67 +207,76 @@ async def get_filter_stats(
         Список продуктов.
 
     """
+    collection = request.app.mongodb['byshoes-collection']
+    max_version = await get_max_version(
+        collection,
+    )
     filters = ProductFilters().apply(query_params)
-    query = request.app.mongodb['byshoes-latest'].aggregate([
-        {'$match': filters},
-        {'$unwind': {'path': '$specification.size'}},
-        {'$group': {
-            '_id': '$specification.size.size_type',
-            'max_price': {'$max': '$price'},
-            'min_price': {'$min': '$price'},
-            'sizes': {'$addToSet': {
-                '$arrayElemAt': ['$specification.size.values', 0],
+    filters['version'] = {'$eq': max_version}
+    query = collection.aggregate(
+        [
+            {'$match': filters},
+            {'$unwind': {'path': '$specification.size'}},
+            {'$group': {
+                '_id': '$specification.size.size_type',
+                'max_price': {'$max': '$price'},
+                'min_price': {'$min': '$price'},
+                'sizes': {'$addToSet': {
+                    '$arrayElemAt': ['$specification.size.values', 0],
+                }},
+                'categories': {'$addToSet': '$category'},
+                'color_types': {'$addToSet': '$specification.color'},
             }},
-            'categories': {'$addToSet': '$category'},
-            'color_types': {'$addToSet': '$specification.color'},
-        }},
-        {'$group': {
-            '_id': None,
-            'max_price': {'$max': '$max_price'},
-            'min_price': {'$min': '$min_price'},
-            'sizes': {'$addToSet': {
-                'size_type': '$_id',
-                'values': '$sizes',
+            {'$group': {
+                '_id': None,
+                'max_price': {'$max': '$max_price'},
+                'min_price': {'$min': '$min_price'},
+                'sizes': {'$addToSet': {
+                    'size_type': '$_id',
+                    'values': '$sizes',
+                }},
+                'categories': {'$addToSet': '$categories'},
+                'color_types': {'$addToSet': '$color_types'},
             }},
-            'categories': {'$addToSet': '$categories'},
-            'color_types': {'$addToSet': '$color_types'},
-        }},
-        {'$addFields': {
-            'categories': {
-                '$reduce': {
-                    'input': '$categories',
-                    'initialValue': [],
-                    'in': {'$setUnion': ['$$value', '$$this']},
+            {'$addFields': {
+                'categories': {
+                    '$reduce': {
+                        'input': '$categories',
+                        'initialValue': [],
+                        'in': {'$setUnion': ['$$value', '$$this']},
+                    },
                 },
-            },
-            'color_types': {
-                '$reduce': {
-                    'input': '$color_types',
-                    'initialValue': [],
-                    'in': {'$setUnion': ['$$value', '$$this']},
+                'color_types': {
+                    '$reduce': {
+                        'input': '$color_types',
+                        'initialValue': [],
+                        'in': {'$setUnion': ['$$value', '$$this']},
+                    },
                 },
-            },
-        }},
-        {'$addFields': {
-            'categories': {
-                '$reduce': {
-                    'input': '$categories',
-                    'initialValue': [],
-                    'in': {'$setUnion': ['$$value', '$$this']},
+            }},
+            {'$addFields': {
+                'categories': {
+                    '$reduce': {
+                        'input': '$categories',
+                        'initialValue': [],
+                        'in': {'$setUnion': ['$$value', '$$this']},
+                    },
                 },
-            },
-            'color_types': {
-                '$reduce': {
-                    'input': '$color_types',
-                    'initialValue': [],
-                    'in': {'$setUnion': ['$$value', '$$this']},
+                'color_types': {
+                    '$reduce': {
+                        'input': '$color_types',
+                        'initialValue': [],
+                        'in': {'$setUnion': ['$$value', '$$this']},
+                    },
                 },
-            },
-        }},
-    ],  allowDiskUse=True,)
+            }},
+        ],
+        allowDiskUse=True,
+    )
     return FilterStats(
         **(await query.next()),  # noqa: B305
         sex_types=[e.value for e in SexEnum],
+        site_types=[e.value for e in SiteEnum],
     )
 
 
