@@ -1,6 +1,8 @@
+from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
+from fastapi.params import Param
 from fastapi_pagination import Page
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -17,7 +19,7 @@ from src.models import (
 from src.rest.filtering import ProductFilters
 from src.rest.ordering import ProductOrdering
 from src.utils.paginate import paginate
-from src.utils.utils import get_max_version
+from src.utils.utils import get_max_version, get_newest_list
 
 router = APIRouter(
     prefix='/api',
@@ -134,43 +136,7 @@ async def get_product_new_list(
     """
     collection = request.app.mongodb['byshoes-collection']
     max_version = await get_max_version(collection)
-    last_items = collection.aggregate(
-        [
-            {'$match': {'version': {'$eq': max_version}}},
-            {'$group': {'_id': {'$concat': ['$site', '$article']}}},
-        ],
-        allowDiskUse=True,
-    )
-    last_items = await last_items.to_list(None)
-    last_items = {item['_id'] for item in last_items}
-    depth = 0
-    while True:
-        depth += 1
-        prev_items = collection.aggregate(
-            [
-                {'$match': {'version': {'$eq': max_version - depth}}},
-                {'$group': {'_id': {'$concat': ['$site', '$article']}}},
-            ],
-            allowDiskUse=True,
-        )
-        prev_items = await prev_items.to_list(None)
-        prev_items = {item['_id'] for item in prev_items}
-        new_items = list(last_items - prev_items)
-        if not (len(new_items) == 0 and depth < max_version):
-            break
-    new_items_ids = collection.aggregate(
-        [
-            {'$match': {'version': {'$eq': max_version}}},
-            {'$group': {
-                '_id': {'$concat': ['$site', '$article']},
-                'id': {'$last': '$_id'},
-            }},
-            {'$match': {'_id': {'$in': new_items}}},
-        ],
-        allowDiskUse=True,
-    )
-    new_items_ids = await new_items_ids.to_list(None)
-    new_items_ids = [item['id'] for item in new_items_ids]
+    new_items_ids = await get_newest_list(collection)
 
     filters = ProductFilters().apply(query_params)
     filters['_id'] = {'$in': new_items_ids}
@@ -195,6 +161,7 @@ async def get_product_new_list(
 )
 async def get_filter_stats(
     request: Request,
+    is_new: Optional[bool] = None,
     query_params: filter_params(ProductFilters) = Depends(),
 ) -> FilterStats:
     """Получение списка продуктов.
@@ -202,6 +169,7 @@ async def get_filter_stats(
     Args:
         request: запрос
         query_params: параметры фильтров
+        is_new: фильтровать по новым.
 
     Returns:
         Список продуктов.
@@ -213,6 +181,10 @@ async def get_filter_stats(
     )
     filters = ProductFilters().apply(query_params)
     filters['version'] = {'$eq': max_version}
+    if is_new is True:
+        filters['_id'] = {'$in': await get_newest_list(collection)}
+    elif is_new is False:
+        filters['_id'] = {'$nin': await get_newest_list(collection)}
     query = collection.aggregate(
         [
             {'$match': filters},
