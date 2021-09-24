@@ -193,13 +193,20 @@ async def get_filter_stats(
                 '_id': '$specification.size.size_type',
                 'max_price': {'$max': '$price'},
                 'min_price': {'$min': '$price'},
-                'sizes': {'$addToSet': {
-                    '$arrayElemAt': ['$specification.size.values', 0],
-                }},
+                'sizes': {'$addToSet': '$specification.size.values'},
                 'categories': {'$addToSet': '$category'},
                 'color_types': {'$addToSet': '$specification.color'},
                 'sex_types': {'$addToSet': '$specification.sex'},
                 'site_types': {'$addToSet': '$site'},
+            }},
+            {'$addFields': {
+                'sizes': {
+                    '$reduce': {
+                        'input': '$sizes',
+                        'initialValue': [],
+                        'in': {'$setUnion': ['$$value', '$$this']},
+                    },
+                },
             }},
             {'$group': {
                 '_id': None,
