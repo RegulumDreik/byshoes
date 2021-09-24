@@ -198,6 +198,8 @@ async def get_filter_stats(
                 }},
                 'categories': {'$addToSet': '$category'},
                 'color_types': {'$addToSet': '$specification.color'},
+                'sex_types': {'$addToSet': '$specification.sex'},
+                'site_types': {'$addToSet': '$site'},
             }},
             {'$group': {
                 '_id': None,
@@ -209,6 +211,8 @@ async def get_filter_stats(
                 }},
                 'categories': {'$addToSet': '$categories'},
                 'color_types': {'$addToSet': '$color_types'},
+                'sex_types': {'$addToSet': '$sex_types'},
+                'site_types': {'$addToSet': '$site_types'},
             }},
             {'$addFields': {
                 'categories': {
@@ -221,6 +225,20 @@ async def get_filter_stats(
                 'color_types': {
                     '$reduce': {
                         'input': '$color_types',
+                        'initialValue': [],
+                        'in': {'$setUnion': ['$$value', '$$this']},
+                    },
+                },
+                'sex_types': {
+                    '$reduce': {
+                        'input': '$sex_types',
+                        'initialValue': [],
+                        'in': {'$setUnion': ['$$value', '$$this']},
+                    },
+                },
+                'site_types': {
+                    '$reduce': {
+                        'input': '$site_types',
                         'initialValue': [],
                         'in': {'$setUnion': ['$$value', '$$this']},
                     },
@@ -245,11 +263,7 @@ async def get_filter_stats(
         ],
         allowDiskUse=True,
     )
-    return FilterStats(
-        **(await query.next()),  # noqa: B305
-        sex_types=[e.value for e in SexEnum],
-        site_types=[e.value for e in SiteEnum],
-    )
+    return FilterStats(**(await query.next()))  # noqa: B305
 
 
 @router.get(
